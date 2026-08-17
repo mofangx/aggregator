@@ -192,7 +192,7 @@ COMMON_SS_SUPPORTED_CIPHERS = [
     "xchacha20-ietf-poly1305",
 ]
 
-# reference: https://github.com/MetaCubeX/sing-shadowsocks2/blob/dev/shadowaead_2022/method.go#L73-L86
+# reference: https://github.com/SagerNet/sing-shadowsocks2/blob/dev/shadowaead_2022/method.go#L72-L86
 MIHOMO_SS_SUPPORTED_CIPHERS_SALT_LEN = {
     "2022-blake3-aes-128-gcm": 16,
     "2022-blake3-aes-256-gcm": 32,
@@ -247,6 +247,12 @@ VMESS_SUPPORTED_CIPHERS = ["auto", "aes-128-gcm", "chacha20-poly1305", "none"]
 
 SPECIAL_PROTOCOLS = set(["vless", "tuic", "hysteria", "hysteria2", "anytls"])
 
+VLESS_MLKEM_X25519_PLUS_PREFIX = "mlkem768x25519plus"
+VLESS_MLKEM_X25519_PLUS_MODES = ("native", "xorpub", "random")
+VLESS_MLKEM_X25519_PLUS_RTTS = ("1rtt", "0rtt")
+VLESS_MLKEM_X25519_PLUS_PADDING_LIMIT = 20
+VLESS_MLKEM_X25519_PLUS_KEY_SIZES = (32, 1184)
+
 # xtls-rprx-direct and xtls-rprx-origin are deprecated and no longer supported
 # XTLS_FLOWS = set(["xtls-rprx-direct", "xtls-rprx-origin", "xtls-rprx-vision"])
 
@@ -290,9 +296,92 @@ def check_ports(port: str, ranges: str, protocol: str) -> bool:
     return True
 
 
+def verify_vless_encryption(encryption: str) -> bool:
+    if not encryption or encryption == "none":
+        return True
+
+    parts = encryption.split(".")
+    if (
+        len(parts) < 4
+        or parts[0] != VLESS_MLKEM_X25519_PLUS_PREFIX
+        or parts[1] not in VLESS_MLKEM_X25519_PLUS_MODES
+        or parts[2] not in VLESS_MLKEM_X25519_PLUS_RTTS
+    ):
+        return False
+
+    for key in parts[3:]:
+        if len(key) < VLESS_MLKEM_X25519_PLUS_PADDING_LIMIT:
+            continue
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", key):
+            return False
+
+        try:
+            content = key + "=" * (-len(key) % 4)
+            decoded = base64.urlsafe_b64decode(content)
+        except:
+            return False
+
+        if len(decoded) not in VLESS_MLKEM_X25519_PLUS_KEY_SIZES:
+            return False
+
+    return True
+
+
+def verify_ss_2022_password(cipher: str, password: str) -> bool:
+    # password is ":"-separated standard base64 PSKs; chacha20 rejects EIH (pskList > 1)
+    # see: https://github.com/SagerNet/sing-shadowsocks2/blob/dev/shadowaead_2022/method.go#L72-L86
+    password = utils.trim(password)
+    if not password:
+        return False
+
+    words = password.split(":")
+    if cipher == "2022-blake3-chacha20-poly1305" and len(words) > 1:
+        return False
+
+    key_len = MIHOMO_SS_SUPPORTED_CIPHERS_SALT_LEN.get(cipher)
+    if not key_len:
+        return False
+
+    for word in words:
+        # Go encoding/base64.StdEncoding: standard alphabet and padding required
+        if not word or not re.fullmatch(r"[A-Za-z0-9+/]+=*$", word) or len(word) % 4 != 0:
+            return False
+        try:
+            text = base64.b64decode(word, validate=True)
+        except:
+            return False
+        if len(text) != key_len:
+            return False
+
+    return True
+
+
+def verify_reality_public_key(public_key: str) -> bool:
+    # mihomo uses base64.RawURLEncoding (URL-safe, no padding) and requires 32 bytes
+    # see: https://github.com/MetaCubeX/mihomo/blob/Alpha/adapter/outbound/reality.go
+    public_key = utils.trim(public_key)
+    if not public_key or not re.fullmatch(r"[A-Za-z0-9_-]+", public_key):
+        return False
+
+    try:
+        decoded = base64.urlsafe_b64decode(public_key + "=" * (-len(public_key) % 4))
+    except:
+        return False
+
+    if len(decoded) != 32:
+        return False
+
+    # reject non-canonical encodings that Go RawURLEncoding.DecodeString rejects
+    canonical = base64.urlsafe_b64encode(decoded).decode("utf-8").rstrip("=")
+    return canonical == public_key
+
+
 def verify(item: dict, mihomo: bool = True) -> bool:
     if not item or type(item) != dict or "type" not in item:
         return False
+
+    # remove dialer-proxy because target proxy maybe not exists
+    item.pop("dialer-proxy", None)
 
     try:
         # name must be string
@@ -337,17 +426,8 @@ def verify(item: dict, mihomo: bool = True) -> bool:
                 return False
 
             if item["cipher"] in MIHOMO_SS_SUPPORTED_CIPHERS_SALT_LEN:
-                # will throw bad key length error
-                # see: https://github.com/MetaCubeX/sing-shadowsocks2/blob/dev/shadowaead_2022/method.go#L59-L108
-                password = str(item.get(authentication, ""))
-                words = password.split(":")
-                for word in words:
-                    try:
-                        text = base64.b64decode(word)
-                        if len(text) != MIHOMO_SS_SUPPORTED_CIPHERS_SALT_LEN.get(item["cipher"]):
-                            return False
-                    except:
-                        return False
+                if not verify_ss_2022_password(item["cipher"], str(item.get(authentication, ""))):
+                    return False
 
             plugin = item.get("plugin", "")
 
@@ -524,16 +604,8 @@ def verify(item: dict, mihomo: bool = True) -> bool:
 
                 # see: https://github.com/MetaCubeX/mihomo/blob/Alpha/transport/vless/encryption/factory.go#L12
                 encryption = utils.trim(item.get("encryption", ""))
-                if encryption not in ["", "none"]:
-                    parts = encryption.split(".")
-
-                    # Must be: mlkem768x25519plus.<mode>.<...>.<...> (len >= 4)
-                    if (
-                        len(parts) < 4
-                        or parts[0] != "mlkem768x25519plus"
-                        or parts[1] not in ("native", "xorpub", "random")
-                    ):
-                        return False
+                if not verify_vless_encryption(encryption):
+                    return False
 
                 network = utils.trim(item.get("network", "tcp"))
 
@@ -578,10 +650,10 @@ def verify(item: dict, mihomo: bool = True) -> bool:
                         return False
 
                     content = utils.trim(reality_opts["public-key"])
-                    content += "=" * (4 - len(content) % 4)
-                    public_key = base64.urlsafe_b64decode(content)
-                    if len(public_key) != 32:
+                    if not verify_reality_public_key(content):
                         return False
+
+                    reality_opts["public-key"] = content
 
                     short_id = reality_opts["short-id"]
                     if type(short_id) != str:
