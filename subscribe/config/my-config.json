@@ -1,0 +1,57 @@
+{
+  "domains": [],
+  "subscribes": [
+    {
+      "name": "GitHub 公开源",
+      "url": "https://githubusercontent.com",
+      "type": "crawl",
+      "enabled": true
+    },
+    {
+      "name": "Telegram 抓取频道",
+      "url": "https://t.me",
+      "type": "telegram",
+      "enabled": true
+    },
+    {
+      "name": "第三方订阅机场链接",
+      "url": "https://example.com",
+      "type": "subscribe",
+      "enabled": false
+    }
+  ],
+  "storage": {
+    "type": "gist",
+    "id": "填入你的GistID",
+    "name": "proxies.txt"
+  },
+  "groups": [
+    {
+      "name": "Clash",
+      "target": "clash",
+      "file": "clash.yaml",
+      "filter": {
+        "include": "",
+        "exclude": "重置|流量|过期"
+      }
+    },
+    {
+      "name": "SingBox",
+      "target": "singbox",
+      "file": "singbox.json",
+      "filter": {
+        "include": "香港|日本|美国",
+        "exclude": ""
+      }
+    },
+    {
+      "name": "V2Ray",
+      "target": "v2ray",
+      "file": "v2ray.txt"
+    }
+  ],
+  "update": {
+    "cron": "0 */6 * * *",
+    "enabled": true
+  }
+}
