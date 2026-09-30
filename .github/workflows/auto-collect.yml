@@ -29,5 +29,6 @@ jobs:
         env:
           GIST_PAT: ${{ secrets.GIST_PAT }}
           GIST_LINK: ${{ secrets.GIST_LINK }}
-        # 运行高级验证与转换脚本
-        run: python process.py
+        # 使用 python 运行 process.py，并指定你的配置文件
+        run: python subscribe/process.py -s subscribe/config/my-config.json -n 32 -t 5000
+
