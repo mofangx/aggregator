@@ -1,53 +1,41 @@
 {
   "domains": [],
-  "subscribes": [
+    "subscribes": [
     {
-      "name": "GitHub 公开源",
+      "name": "GitHub-Alvin9999公共源",
       "url": "https://githubusercontent.com",
       "type": "crawl",
       "enabled": true
     },
     {
-      "name": "Telegram 抓取频道",
+      "name": "GitHub-Aiboboxx每天更新",
+      "url": "https://githubusercontent.com",
+      "type": "crawl",
+      "enabled": true
+    },
+    {
+      "name": "GitHub-v2rayfreenode每日同步",
+      "url": "https://githubusercontent.com",
+      "type": "crawl",
+      "enabled": true
+    },
+    {
+      "name": "Telegram-v2rayfree公开频道",
       "url": "https://t.me",
       "type": "telegram",
       "enabled": true
     },
     {
-      "name": "第三方订阅机场链接",
-      "url": "https://example.com",
+      "name": "Telegram-ssrFreeNode公开频道",
+      "url": "https://t.me",
+      "type": "telegram",
+      "enabled": true
+    },
+    {
+      "name": "wzdnzd官方共享订阅(需要特殊Token)",
+      "url": "https://clawcloudrun.com",
       "type": "subscribe",
       "enabled": false
-    }
-  ],
-  "storage": {
-    "type": "gist",
-    "id": "填入你的GistID",
-    "name": "proxies.txt"
-  },
-  "groups": [
-    {
-      "name": "Clash",
-      "target": "clash",
-      "file": "clash.yaml",
-      "filter": {
-        "include": "",
-        "exclude": "重置|流量|过期"
-      }
-    },
-    {
-      "name": "SingBox",
-      "target": "singbox",
-      "file": "singbox.json",
-      "filter": {
-        "include": "香港|日本|美国",
-        "exclude": ""
-      }
-    },
-    {
-      "name": "V2Ray",
-      "target": "v2ray",
-      "file": "v2ray.txt"
     }
   ],
   "update": {
